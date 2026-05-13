@@ -1,0 +1,8 @@
+.env
+.spotify_cache
+.cache
+data
+.claude
+my_local_db
+Streams
+__pycache__
