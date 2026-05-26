@@ -1,14 +1,18 @@
+import json
+from urllib import response
+
 import chromadb
 from langchain.tools import tool
 from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_tavily import TavilySearch
+from tavily import TavilyClient
 import os
 import requests
 from dotenv import load_dotenv
+import datetime
 
 load_dotenv()
 LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
-
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 def get_db():
     client = chromadb.PersistentClient(path="./my_local_db")
@@ -242,5 +246,186 @@ def check_artist_status(artist_name: str) -> str:
         )
     except Exception as e:
         return f"Error checking artist status: {str(e)}"
+    
+
+"""
+Gig Tools
+"""
+
+@tool
+def search_gig_london(genre: str) -> str:
+    """
+    Search for live music in London tonight
+    """
+
+    tavily = TavilyClient(TAVILY_API_KEY)
+    today_str = datetime.datetime.now().strftime("%d %B %Y") # e.g., "13 May 2026"
+
+    # Keep the query broad to catch older posts that mention tonight
+    niche_query = f"{genre} gigs London tonight (The Windmill Brixton, Shacklewell Arms, Moth Club, Old Blue Last)"
+
+    results = tavily.search(
+        query=niche_query,
+        search_depth="advanced", # Recommended for finding specific event details
+        max_results=10
+    )
+    print(results)
+    for result in results['results']:
+        page_markdown = result.get('raw_content')
+    
+    return page_markdown or "No results found for live music in London tonight."
+
+@tool
+def search_favorite_genres(limit: int) -> str:
+    """
+    Search for news and updates about a favorite genre
+    """
+    try:
+        col = get_db()
+        results = col.get(
+            where={"$and": [
+                {"type": {"$eq": "artist_record"}},
+                {"status": {"$eq": "loved"}}
+            ]}
+        )
+        metas = results["metadatas"]
+        if not metas:
+            return "No loved artists found."
+
+        sorted_loved = sorted(metas, key=lambda x: (x["affinity_score"], x["total_plays"]), reverse=True)[:limit]
+
+        genre_counts: dict[str, int] = {}
+        for s in sorted_loved:
+            genre_str = s.get("genres")
+            if genre_str and genre_str != "unknown":
+                for g in genre_str.split(","):
+                    g = g.strip().lower()
+                    if g:
+                        genre_counts[g] = genre_counts.get(g, 0) + 1
+
+        if not genre_counts:
+            return "Your loved artists don't have any genres listed."
+
+        top_genres = sorted(genre_counts, key=lambda g: genre_counts[g], reverse=True)
+
+        lines = ["### Your Favourite Genres (from loved artists):"]
+        for genre in top_genres:
+            lines.append(f"- {genre} ({genre_counts[genre]} artists)")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error fetching favourite genres: {str(e)}"
+
+@tool
+def search_gigs_tonight(genre: str) -> str:
+    """
+    Search for live music gigs in London tonight matching a specific genre.
+    """
+
+    if not TAVILY_API_KEY:
+        return "Error: Tavily API key is missing."
+
+    tavily = TavilyClient(TAVILY_API_KEY)
+
+    today_str = datetime.datetime.now().strftime("%d %B %Y") 
+
+   
+    venues = "Windmill Brixton OR Shacklewell Arms OR Moth Club OR Old Blue Last OR Darkhorse OR George Tavern"
+    niche_query = f"{genre} live music gigs London tonight {today_str} ({venues})"
+
+    try:
+        results = tavily.search(
+            query=niche_query,
+            search_depth="advanced", 
+            max_results=8
+        )
+        
+        gig_lines = [f"### Live {genre.title()} Gigs in London Tonight ({today_str}):\n"]
+        
+        for result in results.get('results', []):
+            title = result.get('title', 'Live Event')
+            url = result.get('url', '#')
+            snippet = result.get('content', 'No description available.')
+            
+            gig_lines.append(f"**[{title}]({url})**\n{snippet}\n")
+            
+        if len(gig_lines) <= 1:
+            return f"No results found for {genre} music in London tonight."
+            
+        return "\n".join(gig_lines)
+        
+    except Exception as e:
+        return f"Error executing gig search: {str(e)}"
+
+
+@tool
+def search_gigs_favorite_genres(limit: int = 5) -> str:
+    """
+    Finds the user's highest affinity artists, extracts their genres, 
+    and searches Tavily for matching live gigs in London tonight.
+    """
+    try:
+        col = get_db()
+        
+        # 1. Pull the top records using your working metadata type
+        results = col.get(
+            where={"type": {"$eq": "artist_record"}}
+        )
+        metas = results.get("metadatas", [])
+        if not metas:
+            return "No artist records found in your library."
+
+        # 2. Sort by affinity score to get your actual favorites
+        # Safely defaults to 0 if affinity_score is missing
+        sorted_loved = sorted(
+            metas, 
+            key=lambda x: x.get("affinity_score", 0), 
+            reverse=True
+        )[:limit]
+
+        # 3. Extract genres ranked by frequency across top artists
+        genre_counts: dict[str, int] = {}
+        for s in sorted_loved:
+            genre_str = s.get("genres")
+            if genre_str and genre_str != "unknown":
+                for g in genre_str.split(","):
+                    g = g.strip().lower()
+                    if g:
+                        genre_counts[g] = genre_counts.get(g, 0) + 1
+
+        if not genre_counts:
+            return "Your top artists don't have any genres listed to search for."
+
+        top_genres = sorted(genre_counts, key=lambda g: genre_counts[g], reverse=True)[:3]
+
+        # 4. Create a clean search query for Tavily
+        today_str = datetime.datetime.now().strftime("%d %B %Y")
+        genres_query = " OR ".join(top_genres)
+        niche_query = f"live music gigs London {today_str} {genres_query}"
+        
+        if not TAVILY_API_KEY:
+            return "Error: Tavily API key is not configured."
+
+        tavily = TavilyClient(TAVILY_API_KEY)
+        search_results = tavily.search(
+            query=niche_query,
+            search_depth="advanced",
+            max_results=5
+        )
+
+        gig_lines = [f"### Gigs Tonight Based on Your Top Genres ({', '.join(top_genres)}):\n"]
+
+        for result in search_results.get('results', []):
+            title = result.get('title', 'Live Event')
+            url = result.get('url', '#')
+            snippet = result.get('content', 'No description available.')
+            gig_lines.append(f"**[{title}]({url})**\n{snippet}\n")
+
+        if len(gig_lines) <= 1:
+            return f"No gig results found for genres: {genres_query}."
+
+        return "\n".join(gig_lines)
+
+    except Exception as e:
+        return f"Error fetching gig recommendations: {str(e)}"
     
 
