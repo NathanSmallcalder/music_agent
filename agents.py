@@ -6,14 +6,16 @@ from tools import (
     get_genre_favorites,
     find_similar_underground_artists,
     find_artists_by_genre_tag,
-    check_artist_status
+    check_artist_status,
+    search_gigs_favorite_genres,
+    search_gigs_tonight,
 )
 
 # ── LLM ─────────────────────────────────────────────
 llm = ChatOpenAI(
     base_url="http://localhost:1234/v1",
     api_key="lm-studio",
-    model="qwen2.5-7b-instruct-uncensored",
+    model="qwen2.5-7b-instruct",
     temperature=0.7,
     max_tokens=32768,
     stop=["<|im_end|>", "<|endoftext|>"]
@@ -26,7 +28,9 @@ tool_list = [
     get_genre_favorites,
     find_similar_underground_artists,
     find_artists_by_genre_tag,
-    check_artist_status
+    check_artist_status,
+    search_gigs_favorite_genres,
+    search_gigs_tonight,
 ]
 
 # ── Agent ────────────────────────────────────────────
@@ -41,7 +45,11 @@ agent = create_agent(
         "Seed your discovery ONLY from artists with status='loved' or 'liked' — these are the user's "
         "strongest preferences. Liked or neutral artists are context only, not seeds. "
         "Always call find_similar_underground_artists and find_artists_by_genre_tag before making recommendations. "
-        "Do not guess artist names yourself."
+        "Do not guess artist names yourself. "
+        "When asked about gigs or live music: "
+        "First call search_gigs_favorite_genres to find events matching the user's top genres. "
+        "Then call search_gigs_tonight with the top genre for additional targeted results. "
+        "Always present gig results with name, venue, date, and link."
     )
 )
 
@@ -60,8 +68,16 @@ query = (
     "        why it fits my taste based on what I actually love."
 )
 
+query2 = (
+    "Step 1: Call search_gigs_favorite_genres to find London gigs tonight matching my top genres. "
+    "Step 2: From the genres returned in Step 1, pick the top genre and call search_gigs_tonight "
+    "        with that genre for additional targeted results. "
+    "Step 3: Combine all results. Present each gig with: name, venue, date, and link. "
+    "        Remove duplicates. If no gigs are found, say so clearly."
+)
+
 response = agent.invoke({
-    "messages": [("human", query)]
+    "messages": [("human", query2)]
 })
 
 print("\n--- Full Agent Loop ---")

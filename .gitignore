@@ -6,3 +6,4 @@ data
 my_local_db
 Streams
 __pycache__
+.cache
