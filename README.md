@@ -1,4 +1,4 @@
-# 🎵 Spotify Music Discovery Agent
+#  Spotify Music Discovery Agent
 
 A local AI agent that analyses your real Spotify streaming history (2015–2026) to recommend underground artists and surface live gigs in London tonight — all grounded in what you actually listen to, never guesswork.
 
@@ -34,13 +34,13 @@ patch_missing_genres.py   ← backfills empty genres (Spotify API → Last.fm)
 
 ## Features
 
-### 🔍 Underground Artist Discovery
+### Underground Artist Discovery
 - Calls **Last.fm** to find artists similar to your most-loved seeds
 - Filters to artists with **< 200 000 listeners** to keep recommendations truly niche
 - Separately explores the **full genre pool** via `tag.getTopArtists` — not just the "sounds like X" chain
 - Automatically excludes artists already in your library
 
-### 📊 Affinity Scoring
+###  Affinity Scoring
 Your listening history is condensed into an affinity score per artist:
 
 | Score | Status   | Used as         |
@@ -50,13 +50,13 @@ Your listening history is condensed into an affinity score per artist:
 | ≥ 20  | `neutral`| Context only    |
 | < 20  | `disliked` | Excluded      |
 
-### 🎤 London Gig Finder
+### London Gig Finder
 - Extracts your top genres from loved artists
 - Searches **Tavily** for live music tonight at niche London venues
   (Windmill Brixton, Shacklewell Arms, Moth Club, Old Blue Last, George Tavern…)
 - Two-step search: broad genre sweep → targeted per-genre follow-up
 
-### 🧠 Local LLM
+###  Local LLM
 Runs entirely on your machine via **LM Studio** (default model: `qwen2.5-7b-instruct-uncensored`). No cloud inference needed for the agent itself.
 
 ---
