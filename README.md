@@ -187,7 +187,3 @@ Runs a structured 6-step workflow:
 3. Combines, deduplicates, and presents all gigs with name, venue, date, and link
 
 ---
-
-## Security Note
-
-**Never commit your `.env` file.** It is listed in `.gitignore` — keep it that way. Rotate any keys that have been accidentally exposed.
